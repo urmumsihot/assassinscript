@@ -1,11 +1,254 @@
-local function kickPlayer(player)
-    player:Kick("Banned")
+local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/laagginq/ui-libraries/main/coastified/src.lua"))()
+local Window = Lib:Window("Xoxo", "I like penis", Enum.KeyCode.RightShift)
+
+
+
+local Autofarm = Window:Tab("Autofarm")
+local Aiming = Window:Tab("Aiming")
+
+
+-----------------Buttons/Toggles/Sliders
+
+
+local ServerHop = false
+local Ghost_Coins = false 
+
+--// SPECIFICATIONS
+local StabCooldown = false
+local AutofarmEnabled = false 
+local teleportDelay = 5 -- Default delay before teleportation
+local teleportSpeed = 1 -- Default speed for teleporting (duration of tween)
+local TweenService = game:GetService('TweenService')
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+--// User-defined offset values
+local offsetX = 0
+local offsetY = 0
+local offsetZ = 0
+
+-- Function to check if there are remaining targets
+local function hasRemainingTargets()
+    local targetGui = Players.LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("ScreenGui"):WaitForChild("UI").Target
+    return targetGui.Visible and Workspace:FindFirstChild(targetGui.TargetText.Text)
 end
 
-game.Players.PlayerAdded:Connect(function(player)
-    player.Chatted:Connect(function(message)
-        if message:lower() == "/ban" then
-            kickPlayer(player)
+-- Function to toggle Autofarm
+local function toggleAutofarm(value)
+    AutofarmEnabled = value
+    print("Autofarm Enabled:", AutofarmEnabled)
+    if not AutofarmEnabled then
+        Workspace.Gravity = 196.2
+    end
+end
+
+-- Function to update the offsets
+local function updateOffsets(x, y, z)
+    offsetX = x
+    offsetY = y
+    offsetZ = z
+    print("Offsets Updated - X:", offsetX, " Y:", offsetY, " Z:", offsetZ)
+end
+
+--// AUTOFARM
+local function autofarm()
+    game:GetService("RunService").Heartbeat:Connect(function()
+        if AutofarmEnabled then
+            -- TWEEN with delay
+            local targetGui = Players.LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("ScreenGui"):WaitForChild("UI").Target
+            if hasRemainingTargets() then
+                task.wait(teleportDelay) -- Adding a delay before teleportation
+                local targetCFrame = Workspace[targetGui.TargetText.Text].HumanoidRootPart.CFrame * CFrame.new(offsetX, offsetY, offsetZ)
+                local teleportTweenInfo
+                if teleportSpeed <= 0.1 then
+                    -- Instant teleport if speed is 0.1 or lower
+                    teleportTweenInfo = TweenInfo.new(0, Enum.EasingStyle.Linear)
+                else
+                    -- Normal tween with specified speed
+                    teleportTweenInfo = TweenInfo.new(teleportSpeed, Enum.EasingStyle.Linear)
+                end
+                local AutofarmTween = TweenService:Create(
+                    Players.LocalPlayer.Character.HumanoidRootPart,
+                    teleportTweenInfo,
+                    { CFrame = targetCFrame }
+                )
+                AutofarmTween:Play()
+            end
+
+            -- STAB
+            if not StabCooldown and hasRemainingTargets() then
+                local TargetMagnitude = (Workspace[targetGui.TargetText.Text].HumanoidRootPart.Position - Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                if TargetMagnitude <= 5 then
+                    StabCooldown = true
+                    Players.LocalPlayer.PlayerScripts.localknifehandler.HitCheck:Fire(Workspace[targetGui.TargetText.Text])
+                    wait(0.8) -- do not change cooldown time or anticheat will kick you
+                    StabCooldown = false
+                end
+            end
+
+            -- EQUIP KNIFE
+            local knife = Players.LocalPlayer.Backpack:FindFirstChild("Knife")
+            if knife then
+                Players.LocalPlayer.Character.Humanoid:EquipTool(knife)
+            end
+        end
+    end)
+
+    game:GetService("RunService").Heartbeat:Connect(function()
+        if AutofarmEnabled then
+            -- SET GRAVITY
+            if Workspace.Gravity ~= 20 then
+                Workspace.Gravity = 20
+            end
+        end
+    end)
+
+    game:GetService("RunService").Heartbeat:Connect(function()
+        if AutofarmEnabled and ServerHop then
+            -- SERVER HOP
+            local PlayersInGame = #Players:GetPlayers()
+            if PlayersInGame < 4 then
+                game:GetService("TeleportService"):Teleport(game.PlaceId, Players.LocalPlayer)
+            end
+        end
+    end)
+
+    Players.LocalPlayer.CharacterAdded:Connect(function()
+        if AutofarmEnabled and Ghost_Coins then
+            ReplicatedStorage.Remotes.RequestGhostSpawn:InvokeServer()
+            game:GetService("RunService").Heartbeat:Connect(function()
+                for _, v in pairs(Workspace.GhostCoins:GetDescendants()) do
+                    if v:IsA("TouchTransmitter") then
+                        firetouchinterest(Players.LocalPlayer.Character.HumanoidRootPart, v.Parent, 0)
+                        task.wait()
+                        firetouchinterest(Players.LocalPlayer.Character.HumanoidRootPart, v.Parent, 1)
+                    end
+                end
+            end)
+        end
+    end)
+
+    -- Toggle for Autofarm
+    Autofarm:Toggle('Autokill', function(state)
+        toggleAutofarm(state)
+    end)
+
+    -- Slider for Teleport Delay
+    Autofarm:Slider('Teleport Delay', 1, 8.4, teleportDelay, function(value)
+        teleportDelay = value
+        print("Teleport Delay set to:", teleportDelay)
+    end)
+
+    -- Slider for Teleport Speed
+    Autofarm:Slider('Teleport Speed', 0.1, 5, teleportSpeed, function(value)
+        teleportSpeed = value
+        print("Teleport Speed set to:", teleportSpeed)
+    end)
+
+    -- Slider for X Offset
+    Autofarm:Slider('X Offset', -3, 5, offsetX, function(value)
+        offsetX = value
+        updateOffsets(offsetX, offsetY, offsetZ)
+    end)
+
+    -- Slider for Y Offset
+    Autofarm:Slider('Y Offset', -3, 5, offsetY, function(value)
+        offsetY = value
+        updateOffsets(offsetX, offsetY, offsetZ)
+    end)
+
+    -- Slider for Z Offset
+    Autofarm:Slider('Z Offset', -3, 5, offsetZ, function(value)
+        offsetZ = value
+        updateOffsets(offsetX, offsetY, offsetZ)
+    end)
+end
+
+-- Start the autofarm function
+autofarm()
+
+-------------
+
+
+local Player = game:GetService("Players").LocalPlayer
+local Camera = game:GetService("Workspace").CurrentCamera
+local Mouse = Player:GetMouse()
+
+local FOV_Circle = Drawing.new("Circle")
+FOV_Circle.Color = Color3.fromRGB(0, 0, 0)
+FOV_Circle.Thickness = 2.5
+FOV_Circle.NumSides = math.huge
+FOV_Circle.Radius = 75
+FOV_Circle.Visible = false
+FOV_Circle.Filled = false
+FOV_Circle.Transparency = 1
+
+game:GetService('RunService').Stepped:Connect(function()
+    FOV_Circle.Position = Vector2.new(Mouse.X, Mouse.Y + 37)
+end)
+
+local function ClosestPlayerToCursor()
+    local Closest = nil
+    local Distance = 9e9
+    for i, v in pairs(game:GetService("Players"):GetPlayers()) do
+        if v ~= Player then
+            if Workspace[v.Name]:FindFirstChild("Humanoid") and Workspace[v.Name].Humanoid.Health ~= 0 then
+                local Position = Camera:WorldToViewportPoint(Workspace[v.Name].HumanoidRootPart.Position)
+                local Magnitude = (Vector2.new(Position.X, Position.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                if Magnitude < Distance and Magnitude < FOV_Circle.Radius then
+                    Closest = Workspace[v.Name]
+                    Distance = Magnitude
+                end
+            end
+        end
+    end
+    return Closest
+end
+
+local mainToggle = false
+
+Aiming:Toggle('Silent Aim', function(state)
+    mainToggle = state
+end)
+
+Aiming:Toggle('FOV Circle', function(state)
+    FOV_Circle.Visible = state
+end)
+
+Aiming:Slider('FOV Circle Size', 1, 399, 75, function(value)
+    FOV_Circle.Radius = value
+end)
+
+Aiming:Slider('FOV Circle Thickness', 1, 10, 2.5, function(value)
+    FOV_Circle.Thickness = value
+end)
+
+Aiming:Slider('FOV Circle Transparency', 0, 1, 1, function(value)
+    FOV_Circle.Transparency = value
+end)
+
+Aiming:Colorpicker('FOV Circle Color', Color3.fromRGB(0, 0, 0), function(color)
+    FOV_Circle.Color = color
+end)
+
+game:GetService('RunService').RenderStepped:Connect(function()
+    pcall(function()
+        if mainToggle then
+            for _, v in pairs(game:GetService("Workspace").KnifeHost.PowerUps:GetDescendants()) do
+                if v:IsA("Part") then
+                    v.Archivable = false
+                end
+            end
+            for _, v in pairs(game:GetService("Workspace").KnifeHost:GetDescendants()) do
+                if v:IsA("Part") and v.Archivable then
+                    local closestPlayer = ClosestPlayerToCursor()
+                    if closestPlayer then
+                        local PlayerPosition = closestPlayer.baseHitbox.CFrame
+                        v.CFrame = PlayerPosition
+                    end
+                end
+            end
         end
     end)
 end)
